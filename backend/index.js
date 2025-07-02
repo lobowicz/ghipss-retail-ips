@@ -5,6 +5,8 @@ const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const multer = require('multer');
 const twilio = require('twilio');
+const QRCode = require('qrcode');
+const { v4: uuidv4 } = require('uuid');
 const db = require('./db');
 
 const app = express();
@@ -16,6 +18,30 @@ const upload = multer({ dest: 'uploads/' });
 // configure Twilio client
 const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
 const verifySid = process.env.TWILIO_SERVICE_ID
+
+// define auth middleware - protects routes by checking for a valid JWT
+function authMiddleware(req, res, next) {
+  const authHeader = req.headers.authorization;
+  if (!authHeader) {
+    return res.status(401).json({ error: 'Missing Authorization header' });
+  }
+  const parts = authHeader.split(' ');
+  if (parts.length !== 2 || parts[0] !== 'Bearer') {
+    return res.status(401).json({ error: 'Invalid Authorization format' });
+  }
+
+  const token = parts[1];
+  try {
+    // verify the JWT using your secret
+    const payload = jwt.verify(token, process.env.JWT_SECRET);
+    // attach the user ID to the request object
+    req.userId = payload.userId;
+    // continue on to the protected route handler
+    next();
+  } catch (err) {
+    return res.status(401).json({ error: 'Invalid or expired token' });
+  }
+}
 
 // ENDPOINTS 
 app.get('/', (req, res) => res.send('Backend is live!'));
@@ -97,10 +123,31 @@ app.post('/auth/login', async (req, res) => {
   }
 });
 
+// merchant calls this on an order they have with { orderID, amount }
+// we verify the merchant's JWT, generate unique trans. ID (txnID) and insert row into `orders` table
+// convert { txnID, orderID, amount } into a QR-code
+app.post('/orders', authMiddleware, async (req, res) => {
+  try {
+    const merchantId = req.userId;          // from JWT
+    const { orderID, amount } = req.body;
+    if (!orderID || !amount) {
+      return res.status(400).json({ error: 'OrderID and amount required.' });
+    }
 
-
-
-
+    const txnID = uuidv4(); // generate a unique txnID
+    await db.query(     // save the order record
+      `INSERT INTO orders(order_id, merchant_id, amount, txn_id)
+       VALUES ($1, $2, $3, $4)`,
+      [orderID, merchantId, amount, txnID]
+    );
+    const payload = JSON.stringify({ txnID, orderID, amount });  // build the QR payload (JSON string)
+    const qrImage = await QRCode.toDataURL(payload);  // generate a QR image as data-URI
+    res.json({ txnID, qrImage });  // return to the frontend
+  } catch (err) {
+    console.error('Error creating order + QR:', err);
+    res.status(500).json({ error: 'Failed to create order.' });
+  }
+});
 
 
 
