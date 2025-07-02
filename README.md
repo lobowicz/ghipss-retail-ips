@@ -10,4 +10,8 @@
 - `POST /auth/login`: User logs in with phone + PIN; we check verification, compare PIN, issue a JWT.
 - `authMiddleware`: Protect routes by verifying the JWT in the Authorization header.
 
-- `POST /orders`: 
+- `POST /orders`
+- `POST /momo/transfer`
+- `POST /momo/callback`
+- `POST /pay`
+- `GET /orders/:txnID`

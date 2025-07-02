@@ -7,11 +7,13 @@ const multer = require('multer');
 const twilio = require('twilio');
 const QRCode = require('qrcode');
 const { v4: uuidv4 } = require('uuid');
+const axios = require('axios');
 const db = require('./db');
 
 const app = express();
 app.use(cors());
 app.use(express.json());
+const PORT = process.env.PORT || 4000;
 
 // configure Multer for file uploads
 const upload = multer({ dest: 'uploads/' });    
@@ -43,7 +45,7 @@ function authMiddleware(req, res, next) {
   }
 }
 
-// ENDPOINTS 
+// API ENDPOINTS 
 app.get('/', (req, res) => res.send('Backend is live!'));
 
 // store user, hash PIN, save card image, send OTP SMS, store hashed OTP 
@@ -140,7 +142,9 @@ app.post('/orders', authMiddleware, async (req, res) => {
        VALUES ($1, $2, $3, $4)`,
       [orderID, merchantId, amount, txnID]
     );
-    const payload = JSON.stringify({ txnID, orderID, amount });  // build the QR payload (JSON string)
+    const payload = JSON.stringify({ 
+        txnID, orderID, amount 
+    });  // build the QR payload (JSON string)
     const qrImage = await QRCode.toDataURL(payload);  // generate a QR image as data-URI
     res.json({ txnID, qrImage });  // return to the frontend
   } catch (err) {
@@ -149,9 +153,130 @@ app.post('/orders', authMiddleware, async (req, res) => {
   }
 });
 
+// get order { orderID, amount, merchantName, merchantPhone } details for a transactionID
+app.get('/orders/:txnID', async (req, res) => {
+  try {
+    const { txnID } = req.params;
+    const result = await db.query(`
+      SELECT 
+        o.order_id   AS "orderID",
+        o.amount,
+        u.name       AS "merchantName",
+        u.phone      AS "merchantPhone"
+      FROM orders o
+      JOIN users u 
+        ON o.merchant_id = u.id
+      WHERE o.txn_id = $1
+    `, [txnID]);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Order not found' });
+    }
+
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error('GET /orders/:txnID error:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// mock MoMo transfer endpoint
+app.post('/momo/transfer', async (req, res) => {
+  const { fromAcct, toAcct, amount, txnRef } = req.body;
+  // immediately acknowledge the transfer request
+  res.json({ status: 'pending', txnRef });
+  // after 3 seconds, simulate MoMo calling us back with success
+  setTimeout(() => {
+    axios.post(`http://localhost:${PORT}/momo/callback`, {
+      txnRef,
+      status: 'success'
+    }).catch(err => console.error('Callback error:', err));
+  }, 3000);
+});
+
+// mock MoMo callback handler
+app.post('/momo/callback', async (req, res) => {
+  const { txnRef, status } = req.body;
+  try {
+    // update the transaction’s status in the DB
+    await db.query(
+      `UPDATE transactions
+         SET status = $1
+       WHERE txn_id = $2`,
+      [status, txnRef]
+    );
+
+    // later... emit a WebSocket event here for real‐time dashboards
+
+    return res.json({ message: 'Transaction status updated' });
+  } catch (err) {
+    console.error('Error in /momo/callback:', err);
+    return res.status(500).json({ error: 'Callback handler failed' });
+  }
+});
+
+// payment initiation endpoint - after customer scans code and confirms
+app.post('/pay', authMiddleware, async (req, res) => {
+  try {
+    const customerId = req.userId;        // from JWT
+    const { txnID, pin } = req.body;
+    if (!txnID || !pin) {
+      return res.status(400).json({ error: 'txnID and PIN are required' });
+    }
+
+    // verify PIN
+    const userRes = await db.query(
+      `SELECT pin_hash, phone FROM users WHERE id = $1`,
+      [customerId]
+    );
+    const user = userRes.rows[0];
+    if (!user || !(await bcrypt.compare(pin, user.pin_hash))) {
+      return res.status(401).json({ error: 'Invalid PIN' });
+    }
+    // fetch order & merchant info
+    const orderRes = await db.query(
+      `SELECT id AS order_ref, amount, merchant_id
+         FROM orders
+        WHERE txn_id = $1`,
+      [txnID]
+    );
+    if (orderRes.rows.length === 0) {
+      return res.status(404).json({ error: 'Order not found' });
+    }
+    const { order_ref, amount, merchant_id } = orderRes.rows[0];
+    // create pending transaction record
+    await db.query(
+      `INSERT INTO transactions(txn_id, order_ref, customer_id, status)
+       VALUES($1, $2, $3, 'pending')`,
+      [txnID, order_ref, customerId]
+    );
+    // look up MoMo account numbers (we’re using phone as acct here)
+    const fromAcct = user.phone;
+    const merchantRes = await db.query(
+      `SELECT phone AS toAcct FROM users WHERE id = $1`,
+      [merchant_id]
+    );
+    const toAcct = merchantRes.rows[0].toacct; // phone field
+    // call the mock MoMo service to transfer funds
+    await axios.post(`http://localhost:${PORT}/momo/transfer`, {
+      fromAcct,
+      toAcct,
+      amount,
+      txnRef: txnID
+    });
+    // immediately respond to the client
+    return res.json({ status: 'pending', txnID });
+  } catch (err) {
+    console.error('Error in /pay:', err);
+    return res.status(500).json({ error: 'Payment initiation failed' });
+  }
+});
 
 
-const PORT = process.env.PORT || 4000;
+
+
+
+
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
     console.log(`Search: http://localhost:${PORT}`);
