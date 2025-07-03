@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import api from '../api';
 import './MerchantDashboard.css';
 
@@ -47,6 +48,8 @@ export default function MerchantDashboard() {
             </div>
           </div>
         )}
+
+        <Link to="/reconciliation" className="reconciliation-link">Go to Reconciliation Dashboard</Link>
       </div>
     </div>
   );

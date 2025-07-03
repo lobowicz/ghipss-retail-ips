@@ -8,6 +8,8 @@ const twilio = require('twilio');
 const QRCode = require('qrcode');
 const { v4: uuidv4 } = require('uuid');
 const axios = require('axios');
+const http = require('http');
+const socketIo = require('socket.io');
 const db = require('./db');
 
 const app = express();
@@ -20,6 +22,14 @@ const upload = multer({ dest: 'uploads/' });
 // configure Twilio client
 const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
 const verifySid = process.env.TWILIO_SERVICE_SID
+
+// wrap Express in a raw HTTP server
+const server = http.createServer(app);                  // server
+const io = socketIo(server, { cors: { origin: '*' } }); 
+io.on('connection', socket => {
+  console.log('New client connected:', socket.id);
+  socket.on('disconnect', () => console.log('Client disconnected:', socket.id));
+});
 
 // define auth middleware - protects routes by checking for a valid JWT
 function authMiddleware(req, res, next) {
@@ -46,6 +56,7 @@ function authMiddleware(req, res, next) {
 }
 
 // API ENDPOINTS 
+// basic check
 app.get('/', (req, res) => res.send('Backend is live!'));
 
 // store user, hash PIN, save card image, send OTP SMS, store hashed OTP 
@@ -185,9 +196,7 @@ app.post('/pay', authMiddleware, async (req, res) => {
   try {
     const customerId = req.userId;        // from JWT
     const { txnID, pin } = req.body;
-    if (!txnID || !pin) {
-      return res.status(400).json({ error: 'txnID and PIN are required' });
-    }
+    if (!txnID || !pin) return res.status(400).json({ error: 'txnID and PIN are required' });
 
     // verify PIN
     const userRes = await db.query(
@@ -200,14 +209,11 @@ app.post('/pay', authMiddleware, async (req, res) => {
     }
     // fetch order & merchant info
     const orderRes = await db.query(
-      `SELECT id AS order_ref, amount, merchant_id
-         FROM orders
-        WHERE txn_id = $1`,
+        `SELECT id AS order_ref, order_id AS "orderID", amount, merchant_id
+        FROM orders WHERE txn_id = $1`,
       [txnID]
     );
-    if (orderRes.rows.length === 0) {
-      return res.status(404).json({ error: 'Order not found' });
-    }
+    if (!orderRes.rows.length) return res.status(404).json({ error: 'Order not found' });
     const { order_ref, amount, merchant_id } = orderRes.rows[0];
     // create pending transaction record
     await db.query(
@@ -215,13 +221,21 @@ app.post('/pay', authMiddleware, async (req, res) => {
        VALUES($1, $2, $3, 'pending')`,
       [txnID, order_ref, customerId]
     );
+
+    // emit on a new transaction 
+    io.emit('transactionCreated', {
+        txnID,
+        orderID,        
+        amount,
+        status: 'pending',
+        timestamp: new Date().toISOString()
+    });
+
     // look up MoMo account numbers (we’re using phone as acct here)
     const fromAcct = user.phone;
-    const merchantRes = await db.query(
-      `SELECT phone AS toAcct FROM users WHERE id = $1`,
-      [merchant_id]
-    );
+    const merchantRes = await db.query(`SELECT phone AS toAcct FROM users WHERE id = $1`, [merchant_id]);
     const toAcct = merchantRes.rows[0].phone; // phone field
+
     // call the mock MoMo service to transfer funds
     await axios.post(`http://localhost:${PORT}/momo/transfer`, {
       fromAcct,
@@ -237,12 +251,32 @@ app.post('/pay', authMiddleware, async (req, res) => {
   }
 });
 
+// get all transactions with their orderID, amount, timestamp, status
+app.get('/transactions', authMiddleware, async (req, res) => {
+  try {
+    const result = await db.query(`
+        SELECT o.order_id AS "orderID",
+             t.txn_id AS "txnID",
+             o.amount,
+             t.status,
+             t.created_at AS "timestamp"
+        FROM transactions t
+        JOIN orders o ON t.order_ref = o.id
+        ORDER BY t.created_at DESC
+        `);
+    res.json(result.rows);
+  } catch (err) {
+    console.error('GET /transactions error:', err);
+    res.status(500).json({ error: 'Could not fetch transactions' });
+  }
+});
+
 // mock MoMo transfer endpoint
 app.post('/momo/transfer', async (req, res) => {
   const { fromAcct, toAcct, amount, txnRef } = req.body;
   // immediately acknowledge the transfer request
   res.json({ status: 'pending', txnRef });
-  // after 3 seconds, simulate MoMo calling us back with success
+  // after 3 seconds, simulate MoMo API approving transaction has been sent with success
   setTimeout(() => {
     axios.post(`http://localhost:${PORT}/momo/callback`, {
       txnRef,
@@ -263,7 +297,17 @@ app.post('/momo/callback', async (req, res) => {
       [status, txnRef]
     );
 
-    // later... emit a WebSocket event here for real‐time dashboards
+    // after status update, get the transaction details ...
+    const tx = await db.query(`
+        SELECT o.order_id AS "orderID", o.amount, t.txn_id AS "txnID",
+            t.status, t.created_at AS "timestamp"
+        FROM transactions t
+        JOIN orders o ON t.order_ref = o.id
+        WHERE t.txn_id = $1`, [txnRef]);
+    // ... then, emit the updated transaction
+    if (tx.rows[0]) {
+        io.emit('transactionUpdated', tx.rows[0]);
+    }
 
     return res.json({ message: 'Transaction status updated' });
   } catch (err) {
@@ -272,7 +316,9 @@ app.post('/momo/callback', async (req, res) => {
   }
 });
 
-app.listen(PORT, () => {
+
+// START SERVER AND WEB SOCKET
+server.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
     console.log(`Search: http://localhost:${PORT}`);
 });
