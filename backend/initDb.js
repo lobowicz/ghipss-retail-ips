@@ -2,6 +2,11 @@ const db = require('./db');
 
 async function setup() {
   try {
+    // await db.query(`TRUNCATE TABLE 
+    //   users, orders, otps, transactions 
+    //   RESTART IDENTITY CASCADE;`);
+    //   console.log('All tables truncated.')
+
     await db.query(`
       CREATE TABLE IF NOT EXISTS users (
         id SERIAL PRIMARY KEY,
@@ -43,8 +48,7 @@ async function setup() {
   } catch (err) {
     console.error('Error creating tables:', err);
   } finally {
-    // end the DB pool so the script exits
-    db.pool.end();
+    db.pool.end();  // end the DB pool so the script exits
   }
 }
 

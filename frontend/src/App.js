@@ -1,11 +1,26 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import Signup from './pages/Signup';
+import VerifyOTP from './pages/VerifyOTP';
+import Login from './pages/Login';
+import MerchantDashboard from './pages/MerchantDashboard';
+import ScanPay from './pages/ScanPay';
+
+function RequireAuth({ children }) {
+  const token = localStorage.getItem('token');
+  return token ? children : <Navigate to="/login" />;
+}
 
 export default function App() {
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/" element={<h1>Improved GhIPSS IPS</h1>} />
+        <Route path="/" element={<Navigate to="/login" />} />
+        <Route path="/signup" element={<Signup />} />
+        <Route path="/verify-otp" element={<VerifyOTP />} />
+        <Route path="/login" element={<Login />} />
+        <Route path="/merchant" element={ <RequireAuth><MerchantDashboard /></RequireAuth> } />
+        <Route path="/scan-pay" element={<ScanPay />} />
       </Routes>
     </BrowserRouter>
-  )
+  );
 }

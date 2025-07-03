@@ -1,0 +1,234 @@
+.scanpay-container {
+  min-height: 100vh;
+  background: linear-gradient(135deg, #805ad5 0%, #553c9a 100%);
+  padding: 20px;
+}
+
+.scanpay-card {
+  max-width: 500px;
+  margin: 0 auto;
+  background: white;
+  border-radius: 16px;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+  padding: 40px;
+  animation: slideUp 0.6s ease-out;
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.scanpay-title {
+  font-size: 2.2rem;
+  font-weight: 700;
+  text-align: center;
+  color: #1a202c;
+  margin-bottom: 40px;
+  background: linear-gradient(135deg, #805ad5, #553c9a);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.qr-scanner-section {
+  text-align: center;
+  padding: 20px;
+  background: #f7fafc;
+  border-radius: 12px;
+  border: 2px dashed #cbd5e0;
+  margin-bottom: 20px;
+}
+
+.qr-scanner-wrapper {
+  max-width: 300px;
+  margin: 0 auto;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.1);
+}
+
+.qr-scanner-instructions {
+  color: #718096;
+  font-size: 0.9rem;
+  margin-top: 15px;
+  line-height: 1.5;
+}
+
+.payment-section {
+  background: #f7fafc;
+  border-radius: 12px;
+  padding: 30px;
+  border: 2px solid #e2e8f0;
+  animation: fadeIn 0.8s ease-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.payment-amount {
+  font-size: 2.5rem;
+  font-weight: 800;
+  color: #2d3748;
+  text-align: center;
+  margin-bottom: 25px;
+  background: linear-gradient(135deg, #805ad5, #553c9a);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.payment-details {
+  background: white;
+  padding: 20px;
+  border-radius: 8px;
+  margin-bottom: 25px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.payment-merchant {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #4a5568;
+  margin-bottom: 8px;
+}
+
+.payment-order-id {
+  font-size: 0.9rem;
+  color: #718096;
+  font-family: 'Courier New', monospace;
+  background: #edf2f7;
+  padding: 8px 12px;
+  border-radius: 4px;
+  display: inline-block;
+}
+
+.payment-form {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.payment-pin-input {
+  padding: 14px 16px;
+  border: 2px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 1.2rem;
+  font-weight: 600;
+  text-align: center;
+  letter-spacing: 0.3em;
+  transition: all 0.3s ease;
+  background: #f8fafc;
+  max-width: 200px;
+  margin: 0 auto;
+}
+
+.payment-pin-input:focus {
+  outline: none;
+  border-color: #805ad5;
+  background: white;
+  box-shadow: 0 0 0 3px rgba(128, 90, 213, 0.1);
+}
+
+.payment-button {
+  background: linear-gradient(135deg, #805ad5, #553c9a);
+  color: white;
+  padding: 16px 32px;
+  border: none;
+  border-radius: 8px;
+  font-size: 1.1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.payment-button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 20px rgba(128, 90, 213, 0.3);
+}
+
+.payment-button:active {
+  transform: translateY(0);
+}
+
+.payment-button:before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+  transition: left 0.5s;
+}
+
+.payment-button:hover:before {
+  left: 100%;
+}
+
+.message {
+  padding: 15px 20px;
+  border-radius: 8px;
+  margin-top: 20px;
+  text-align: center;
+  font-weight: 500;
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0% { opacity: 1; }
+  50% { opacity: 0.7; }
+  100% { opacity: 1; }
+}
+
+.message.success {
+  background: #c6f6d5;
+  color: #22543d;
+  border-left: 4px solid #38a169;
+}
+
+.message.error {
+  background: #fed7d7;
+  color: #c53030;
+  border-left: 4px solid #c53030;
+}
+
+.message.processing {
+  background: #bee3f8;
+  color: #2a69ac;
+  border-left: 4px solid #3182ce;
+}
+
+@media (max-width: 480px) {
+  .scanpay-card {
+    padding: 30px 20px;
+  }
+  
+  .scanpay-title {
+    font-size: 1.8rem;
+  }
+  
+  .payment-amount {
+    font-size: 2rem;
+  }
+  
+  .payment-section {
+    padding: 20px;
+  }
+}

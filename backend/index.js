@@ -19,7 +19,7 @@ const PORT = process.env.PORT || 4000;
 const upload = multer({ dest: 'uploads/' });    
 // configure Twilio client
 const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
-const verifySid = process.env.TWILIO_SERVICE_ID
+const verifySid = process.env.TWILIO_SERVICE_SID
 
 // define auth middleware - protects routes by checking for a valid JWT
 function authMiddleware(req, res, next) {
@@ -54,14 +54,14 @@ app.post('/auth/signup', upload.single('cardImage'), async (req, res) => {
     const { name, email, phone, pin } = req.body;
     const card_url = req.file.path;
     const pin_hash = await bcrypt.hash(pin, 10);
-    // 1. Insert unverified user
+    // insert unverified user
     const result = await db.query(
       `INSERT INTO users(name,email,phone,pin_hash,card_url,verified)
        VALUES($1,$2,$3,$4,$5,FALSE) RETURNING id`,
       [name, email, phone, pin_hash, card_url]
     );
     const userId = result.rows[0].id;
-    // 2. Ask Twilio to send an OTP to that phone
+    // ask Twilio to send an OTP to that phone
     await client.verify.v2.services(verifySid)
       .verifications
       .create({ to: '+18043977141', channel: 'sms' }); // use test number for now
@@ -76,11 +76,11 @@ app.post('/auth/signup', upload.single('cardImage'), async (req, res) => {
 app.post('/auth/verify-otp', async (req, res) => {
   try {
     const { phone, code } = req.body;
-    // 1. Ask Twilio to check the code
+    // ask Twilio to check the code
     const check = await client.verify.v2.services(verifySid)
       .verificationChecks
       .create({ to: '+18043977141', code }); 
-    // 2. If Twilio says “approved” and "valid", mark user verified
+    // if Twilio says “approved” and "valid", mark user verified
     if (check.status === 'approved' && check.valid == true) {
       await db.query(`UPDATE users SET verified = TRUE WHERE phone = $1`, [phone]);
       return res.json({ message: 'Phone verified! You can now log in.' });
@@ -153,7 +153,7 @@ app.post('/orders', authMiddleware, async (req, res) => {
   }
 });
 
-// get order { orderID, amount, merchantName, merchantPhone } details for a transactionID
+// get order details { orderID, amount, merchantName, merchantPhone } for a transactionID
 app.get('/orders/:txnID', async (req, res) => {
   try {
     const { txnID } = req.params;
@@ -177,41 +177,6 @@ app.get('/orders/:txnID', async (req, res) => {
   } catch (err) {
     console.error('GET /orders/:txnID error:', err);
     res.status(500).json({ error: 'Server error' });
-  }
-});
-
-// mock MoMo transfer endpoint
-app.post('/momo/transfer', async (req, res) => {
-  const { fromAcct, toAcct, amount, txnRef } = req.body;
-  // immediately acknowledge the transfer request
-  res.json({ status: 'pending', txnRef });
-  // after 3 seconds, simulate MoMo calling us back with success
-  setTimeout(() => {
-    axios.post(`http://localhost:${PORT}/momo/callback`, {
-      txnRef,
-      status: 'success'
-    }).catch(err => console.error('Callback error:', err));
-  }, 3000);
-});
-
-// mock MoMo callback handler
-app.post('/momo/callback', async (req, res) => {
-  const { txnRef, status } = req.body;
-  try {
-    // update the transaction’s status in the DB
-    await db.query(
-      `UPDATE transactions
-         SET status = $1
-       WHERE txn_id = $2`,
-      [status, txnRef]
-    );
-
-    // later... emit a WebSocket event here for real‐time dashboards
-
-    return res.json({ message: 'Transaction status updated' });
-  } catch (err) {
-    console.error('Error in /momo/callback:', err);
-    return res.status(500).json({ error: 'Callback handler failed' });
   }
 });
 
@@ -256,7 +221,7 @@ app.post('/pay', authMiddleware, async (req, res) => {
       `SELECT phone AS toAcct FROM users WHERE id = $1`,
       [merchant_id]
     );
-    const toAcct = merchantRes.rows[0].toacct; // phone field
+    const toAcct = merchantRes.rows[0].phone; // phone field
     // call the mock MoMo service to transfer funds
     await axios.post(`http://localhost:${PORT}/momo/transfer`, {
       fromAcct,
@@ -272,10 +237,40 @@ app.post('/pay', authMiddleware, async (req, res) => {
   }
 });
 
+// mock MoMo transfer endpoint
+app.post('/momo/transfer', async (req, res) => {
+  const { fromAcct, toAcct, amount, txnRef } = req.body;
+  // immediately acknowledge the transfer request
+  res.json({ status: 'pending', txnRef });
+  // after 3 seconds, simulate MoMo calling us back with success
+  setTimeout(() => {
+    axios.post(`http://localhost:${PORT}/momo/callback`, {
+      txnRef,
+      status: 'success'
+    }).catch(err => console.error('Callback error:', err));
+  }, 3000);
+});
 
+// mock MoMo callback handler
+app.post('/momo/callback', async (req, res) => {
+  const { txnRef, status } = req.body;
+  try {
+    // update the transaction’s status in the DB
+    await db.query(
+      `UPDATE transactions
+         SET status = $1
+       WHERE txn_id = $2`,
+      [status, txnRef]
+    );
 
+    // later... emit a WebSocket event here for real‐time dashboards
 
-
+    return res.json({ message: 'Transaction status updated' });
+  } catch (err) {
+    console.error('Error in /momo/callback:', err);
+    return res.status(500).json({ error: 'Callback handler failed' });
+  }
+});
 
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
