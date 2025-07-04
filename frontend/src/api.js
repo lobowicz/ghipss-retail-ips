@@ -1,8 +1,7 @@
 import axios from 'axios';
 
 const api = axios.create({
-  baseURL: '/',  // proxy in package.json points to http://localhost:4000
-  headers: { 'Content-Type': 'application/json' }
+  baseURL: 'http://localhost:4000', 
 });
 
 // "axios interceptor" - attach JWT token automatically if present

@@ -22,15 +22,13 @@ export default function Signup() {
     e.preventDefault();
     try {
       const data = new FormData();
-      data.append('name', form.name);
-      data.append('email', form.email);
-      data.append('phone', form.phone);
-      data.append('pin', form.pin);
+      data.append('name', form.name.trim());
+      data.append('email', form.email.trim());
+      data.append('phone', form.phone.trim());
+      data.append('pin', form.pin.trim());
       data.append('cardImage', form.cardImage);
 
-      await api.post('/auth/signup', data, {
-        headers: { 'Content-Type': 'multipart/form-data' }
-      });
+      await api.post('/auth/signup', data);
       navigate('/verify-otp');
     } catch (err) {
       setError(err.response?.data?.error || 'Signup failed');

@@ -2,10 +2,10 @@ const db = require('./db');
 
 async function setup() {
   try {
-    // await db.query(`TRUNCATE TABLE 
-    //   users, orders, otps, transactions 
-    //   RESTART IDENTITY CASCADE;`);
-    //   console.log('All tables truncated.')
+    await db.query(`TRUNCATE TABLE 
+      users, orders, otps, transactions 
+      RESTART IDENTITY CASCADE;`);
+    console.log('All tables truncated.');
 
     await db.query(`
       CREATE TABLE IF NOT EXISTS users (

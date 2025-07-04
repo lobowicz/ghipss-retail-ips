@@ -21,7 +21,7 @@ const PORT = process.env.PORT || 4000;
 const upload = multer({ dest: 'uploads/' });    
 // configure Twilio client
 const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
-const verifySid = process.env.TWILIO_SERVICE_SID
+const verifySid = process.env.TWILIO_SERVICE_SID;
 
 // wrap Express in a raw HTTP server
 const server = http.createServer(app);                  // server
@@ -64,7 +64,10 @@ app.post('/auth/signup', upload.single('cardImage'), async (req, res) => {
   try {
     const { name, email, phone, pin } = req.body;
     const card_url = req.file.path;
-    const pin_hash = await bcrypt.hash(pin, 10);
+    // check if user already exists
+    const existUser = await db.query(`SELECT id FROM users WHERE email = $1 OR phone = $2`, [email, phone]);
+    if (existUser.rows.length > 0) return res.status(400).json({ error: "User with this email or phone number already exists." });
+    const pin_hash = await bcrypt.hash(pin, 10); 
     // insert unverified user
     const result = await db.query(
       `INSERT INTO users(name,email,phone,pin_hash,card_url,verified)
