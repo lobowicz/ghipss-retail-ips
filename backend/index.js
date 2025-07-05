@@ -156,9 +156,7 @@ app.post('/orders', authMiddleware, async (req, res) => {
        VALUES ($1, $2, $3, $4)`,
       [orderID, merchantId, amount, txnID]
     );
-    const payload = JSON.stringify({ 
-        txnID, orderID, amount 
-    });  // build the QR payload (JSON string)
+    const payload = JSON.stringify({ txnID, orderID, amount });  // build the QR payload (JSON string)
     const qrImage = await QRCode.toDataURL(payload);  // generate a QR image as data-URI
     res.json({ txnID, qrImage });  // return to the frontend
   } catch (err) {

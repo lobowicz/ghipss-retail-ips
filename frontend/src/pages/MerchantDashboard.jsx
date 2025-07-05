@@ -40,7 +40,7 @@ export default function MerchantDashboard() {
             <h2 className="qr-title">Payment QR Code Generated</h2>
             <div className="qr-txn-id">Transaction ID: {qrData.txnID}</div>
             <div className="qr-code">
-              <img src={qrData.qrCode} alt="QR Code" />
+              <img src={qrData.qrImage} alt="QR Code" />
             </div>
             <div className="qr-instructions">
               <strong>Instructions:</strong><br />
