@@ -1,7 +1,5 @@
 ---
 
-## title: "InstantPay-Africa Sandbox"
-
 # InstantPay-Africa Sandbox
 
 A full-stack demo retail payment platform showcasing how small-to-medium retailers can integrate their checkout systems to generate dynamic, amount-locked QR codes and accept automated Mobile-Money or bank transfers.
